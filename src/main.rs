@@ -65,6 +65,7 @@ async fn main() {
     let app = Router::new()
         .nest("/api/roadmap", routes::roadmap_routes::router())
         .nest("/api/notes", routes::note_routes::router())
+        .nest("/api/auth", routes::auth_routes::router())
         .layer(cors)
         .layer(TraceLayer::new_for_http()) // 此层负责打印每个 HTTP 请求的详细日志
         .with_state(pool);

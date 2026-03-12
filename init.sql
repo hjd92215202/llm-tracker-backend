@@ -47,3 +47,16 @@ $$ language 'plpgsql';
 
 CREATE TRIGGER update_roadmap_modtime BEFORE UPDATE ON roadmap_nodes FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
 CREATE TRIGGER update_notes_modtime BEFORE UPDATE ON notes FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
+
+-- 1. 用户表
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 2. 修改现有表，增加 user_id 关联 (个人系统可先不强制，但建议加上)
+ALTER TABLE roadmap_nodes ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;
+ALTER TABLE notes ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;
