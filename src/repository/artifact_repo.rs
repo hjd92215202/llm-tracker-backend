@@ -1,18 +1,22 @@
-use sqlx::PgPool;
-use crate::models::artifact::{Artifact, CreateArtifactRequest};
 use crate::error::AppResult;
+use crate::models::artifact::{Artifact, CreateArtifactRequest};
+use sqlx::PgPool;
 
 pub struct ArtifactRepository;
 
 impl ArtifactRepository {
     pub async fn create(pool: &PgPool, req: CreateArtifactRequest) -> AppResult<Artifact> {
-        tracing::debug!("💾 SQL: 正在为笔记 {} 插入附件: {}", req.note_id, req.artifact_type);
+        tracing::debug!(
+            "💾 SQL: 正在为笔记 {} 插入附件: {}",
+            req.note_id,
+            req.artifact_type
+        );
         let artifact = sqlx::query_as::<_, Artifact>(
             r#"
             INSERT INTO artifacts (note_id, artifact_type, title, content_url)
             VALUES ($1, $2, $3, $4)
             RETURNING *
-            "#
+            "#,
         )
         .bind(req.note_id)
         .bind(req.artifact_type)

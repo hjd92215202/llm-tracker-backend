@@ -6,11 +6,11 @@ use tower_http::trace::TraceLayer;
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 mod error;
+mod handlers;
 mod models;
 mod repository;
-mod services;
-mod handlers;
 mod routes;
+mod services;
 
 #[tokio::main]
 async fn main() {
@@ -20,13 +20,13 @@ async fn main() {
     // 2. 初始化日志系统 (确保在所有逻辑之前)
     // 注意：如果你的包名是 llm-tracker-backend，过滤规则必须写成 llm_tracker_backend
     tracing_subscriber::registry()
-        .with(fmt::layer()
-            .with_target(false) 
-            .with_ansi(true) // 开启彩色输出
+        .with(
+            fmt::layer().with_target(false).with_ansi(true), // 开启彩色输出
         )
-        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-            "llm_tracker_backend=info,tower_http=debug,sqlx=warn".into()
-        }))
+        .with(
+            EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "llm_tracker_backend=info,tower_http=debug,sqlx=warn".into()),
+        )
         .init();
 
     tracing::info!("🚀 大模型学习记录系统后端正在启动...");
@@ -42,12 +42,12 @@ async fn main() {
     let pool = match PgPoolOptions::new()
         .max_connections(10)
         .connect(&db_url)
-        .await 
+        .await
     {
         Ok(p) => {
             tracing::info!("✅ 数据库连接成功！");
             p
-        },
+        }
         Err(e) => {
             tracing::error!("❌ 数据库连接失败: {}", e);
             tracing::error!("💡 请确保 Postgres 已启动且 .env 配置正确");
@@ -71,12 +71,12 @@ async fn main() {
 
     // 6. 服务绑定
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
-    
+
     let listener = match tokio::net::TcpListener::bind(addr).await {
         Ok(l) => {
             tracing::info!("🌐 服务运行于: http://{}", addr);
             l
-        },
+        }
         Err(e) => {
             tracing::error!("❌ 无法绑定端口 {}: {}", addr, e);
             std::process::exit(1);

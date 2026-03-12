@@ -1,6 +1,6 @@
-use sqlx::PgPool;
-use crate::models::note::{Note, CreateNoteRequest};
 use crate::error::AppResult;
+use crate::models::note::{CreateNoteRequest, Note};
+use sqlx::PgPool;
 
 pub struct NoteRepository;
 
@@ -12,7 +12,7 @@ impl NoteRepository {
             INSERT INTO notes (node_id, title, content, tags)
             VALUES ($1, $2, $3, $4)
             RETURNING *
-            "#
+            "#,
         )
         .bind(req.node_id)
         .bind(req.title)
@@ -26,7 +26,7 @@ impl NoteRepository {
     pub async fn find_by_node(pool: &PgPool, node_id: i32) -> AppResult<Vec<Note>> {
         tracing::debug!("💾 SQL: 查询节点 {} 下的所有笔记", node_id);
         let notes = sqlx::query_as::<_, Note>(
-            "SELECT * FROM notes WHERE node_id = $1 ORDER BY created_at DESC"
+            "SELECT * FROM notes WHERE node_id = $1 ORDER BY created_at DESC",
         )
         .bind(node_id)
         .fetch_all(pool)

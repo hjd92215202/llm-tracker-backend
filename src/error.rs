@@ -21,7 +21,10 @@ impl IntoResponse for AppError {
         let (status, error_message) = match self {
             AppError::DatabaseError(ref e) => {
                 error!("❌ [数据库严重错误]: {:?}", e);
-                (StatusCode::INTERNAL_SERVER_ERROR, "数据库操作失败，请检查后端日志".to_string())
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "数据库操作失败，请检查后端日志".to_string(),
+                )
             }
             AppError::NotFound(ref msg) => {
                 error!("🔍 [资源不存在]: {}", msg);

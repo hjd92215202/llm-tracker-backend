@@ -1,10 +1,13 @@
-use axum::{extract::{State, Path}, Json};
-use sqlx::PgPool;
-use serde_json::{json, Value};
-use crate::services::note_service::NoteService;
-use crate::models::note::CreateNoteRequest;
-use crate::models::artifact::CreateArtifactRequest;
 use crate::error::AppResult;
+use crate::models::artifact::CreateArtifactRequest;
+use crate::models::note::CreateNoteRequest;
+use crate::services::note_service::NoteService;
+use axum::{
+    extract::{Path, State},
+    Json,
+};
+use serde_json::{json, Value};
+use sqlx::PgPool;
 
 pub async fn create_note(
     State(pool): State<PgPool>,

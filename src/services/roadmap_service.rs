@@ -1,7 +1,7 @@
-use sqlx::PgPool;
-use crate::repository::roadmap_repo::RoadmapRepository;
-use crate::models::roadmap::{RoadmapNode, CreateNodeRequest};
 use crate::error::AppResult;
+use crate::models::roadmap::{CreateNodeRequest, RoadmapNode, UpdateNodeRequest};
+use crate::repository::roadmap_repo::RoadmapRepository;
+use sqlx::PgPool;
 
 pub struct RoadmapService;
 
@@ -19,5 +19,20 @@ impl RoadmapService {
     pub async fn update_node_status(pool: &PgPool, id: i32, status: String) -> AppResult<()> {
         tracing::info!("🚀 业务逻辑: 更新节点 {} 的学习状态为 {}", id, status);
         RoadmapRepository::update_status(pool, id, &status).await
+    }
+
+    pub async fn update_node(pool: &PgPool, id: i32, req: UpdateNodeRequest) -> AppResult<()> {
+        tracing::info!("🚀 业务逻辑: 正在处理节点 {} 的完整信息更新请求", id);
+
+        // 可以在此处增加校验逻辑：例如 parent_id 不能等于自己的 id，防止死循环
+        if let Some(p_id) = req.parent_id {
+            if p_id == id {
+                return Err(crate::error::AppError::Internal(
+                    "节点的父节点不能指向自己".into(),
+                ));
+            }
+        }
+
+        RoadmapRepository::update(pool, id, req).await
     }
 }
