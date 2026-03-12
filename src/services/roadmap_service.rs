@@ -35,4 +35,9 @@ impl RoadmapService {
 
         RoadmapRepository::update(pool, id, req).await
     }
+
+    pub async fn remove_node(pool: &PgPool, id: i32) -> AppResult<()> {
+        tracing::warn!("🚀 业务逻辑: 触发节点物理删除, ID: {}", id);
+        RoadmapRepository::delete(pool, id).await
+    }
 }

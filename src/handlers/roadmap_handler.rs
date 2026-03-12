@@ -53,3 +53,17 @@ pub async fn update_node(
         "msg": format!("节点 {} 已成功更新", id)
     })))
 }
+
+pub async fn delete_node(
+    State(pool): State<PgPool>,
+    Path(id): Path<i32>,
+) -> AppResult<Json<Value>> {
+    tracing::warn!("📬 请求进入: 删除路线图节点, ID: {}", id);
+
+    crate::services::roadmap_service::RoadmapService::remove_node(&pool, id).await?;
+
+    Ok(Json(json!({
+        "success": true,
+        "msg": format!("节点 {} 及其子节点已成功移除", id)
+    })))
+}

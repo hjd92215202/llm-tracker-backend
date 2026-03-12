@@ -73,4 +73,20 @@ impl RoadmapRepository {
 
         Ok(())
     }
+
+    pub async fn delete(pool: &PgPool, id: i32) -> AppResult<()> {
+        tracing::info!("💾 SQL: 正在删除节点及其级联内容, ID: {}", id);
+        let result = sqlx::query("DELETE FROM roadmap_nodes WHERE id = $1")
+            .bind(id)
+            .execute(pool)
+            .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(crate::error::AppError::NotFound(format!(
+                "未找到 ID 为 {} 的节点",
+                id
+            )));
+        }
+        Ok(())
+    }
 }
