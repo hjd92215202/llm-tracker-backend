@@ -1,87 +1,123 @@
-use crate::models::user::{User, RegisterRequest, LoginRequest, AuthResponse, Claims};
-use crate::repository::user_repo::UserRepository;
 use crate::error::{AppError, AppResult};
+use crate::models::user::{AuthResponse, Claims, LoginRequest, RegisterRequest, User};
+use crate::repository::user_repo::UserRepository;
 use bcrypt::{hash, verify, DEFAULT_COST};
-use jsonwebtoken::{encode, Header, EncodingKey};
+use chrono::{Duration, Utc};
+use jsonwebtoken::{encode, EncodingKey, Header};
 use sqlx::PgPool;
 use std::env;
-use chrono::{Utc, Duration};
 
 pub struct AuthService;
 
 impl AuthService {
-    /// 处理用户注册
+    /// 💡 处理用户注册
+    /// 解决了 "cannot move out of req because it is borrowed" 的冲突
     pub async fn register(pool: &PgPool, req: RegisterRequest) -> AppResult<User> {
-        tracing::info!("🚀 [Auth Service] 正在尝试注册新用户: {}", req.username);
+        tracing::info!("🚀 [Auth Service] 收到注册请求，用户名: {}", req.username);
 
-        // 1. 唯一性检查：检查用户名是否已被占用
-        if UserRepository::find_by_username(pool, &req.username).await?.is_some() {
-            tracing::warn!("⚠️ 注册失败: 用户名 {} 已存在", req.username);
+        // --- 1. 参数合法性校验 (直接调用，不产生长期借用变量) ---
+        if req.username.trim().is_empty() {
+            return Err(AppError::ValidationError("用户名不能为空".into()));
+        }
+        if req.email.trim().is_empty() || !req.email.contains('@') {
+            return Err(AppError::ValidationError("邮箱格式非法".into()));
+        }
+        if req.password.len() < 6 {
+            return Err(AppError::ValidationError("密码至少需要6位".into()));
+        }
+
+        // --- 2. 唯一性核验 ---
+        // 校验用户名是否重复
+        if UserRepository::find_by_username(pool, req.username.trim())
+            .await?
+            .is_some()
+        {
+            tracing::warn!("⚠️ [注册拦截] 用户名 '{}' 已被占用", req.username);
             return Err(AppError::Conflict("该用户名已被占用".into()));
         }
 
-        // 2. 密码哈希处理
-        // 💡 修复点：使用 &req.password 获取引用，不移动 req 的所有权
+        // 校验邮箱是否重复
+        if UserRepository::find_by_email(pool, req.email.trim())
+            .await?
+            .is_some()
+        {
+            tracing::warn!("⚠️ [注册拦截] 邮箱 '{}' 已被注册", req.email);
+            return Err(AppError::Conflict("该邮箱已被注册".into()));
+        }
+
+        // --- 3. 密码安全哈希 ---
+        // 这里只是临时借用 &req.password，这行结束后借用即解除
+        tracing::debug!("🔐 正在为用户 {} 计算 Bcrypt 哈希...", req.username);
         let password_hash = hash(&req.password, DEFAULT_COST)?;
-        tracing::debug!("🔐 用户 {} 的密码哈希计算完成", req.username);
 
-        // 3. 调用仓库层保存数据
-        // 此时 req 依然是完整的，可以被移动到 create 函数中
-        let new_user = UserRepository::create(pool, req, password_hash).await?;
+        // --- 4. 存储数据 (执行所有权转移 Move) ---
+        // 💡 重点：由于上面没有任何变量还在“借用”req，这里可以安全 move
+        let user_name_for_log = req.username.clone(); // 提前克隆一份用于打印日志
+        let user = UserRepository::create(pool, req, password_hash)
+            .await
+            .map_err(|e| {
+                tracing::error!(
+                    "🔥 [Database Error] 写入用户 {} 失败: {:?}",
+                    user_name_for_log,
+                    e
+                );
+                e
+            })?;
 
-        tracing::info!("✅ 用户 {} 注册成功，ID: {}", new_user.username, new_user.id);
-        Ok(new_user)
+        tracing::info!(
+            "✅ [注册成功] 用户 {} 已入库, ID: {}",
+            user.username,
+            user.id
+        );
+        Ok(user)
     }
 
-    /// 处理用户登录并签发 Token
+    /// 💡 处理用户登录
     pub async fn login(pool: &PgPool, req: LoginRequest) -> AppResult<AuthResponse> {
-        tracing::info!("🔑 [Auth Service] 正在验证用户登录: {}", req.username);
+        tracing::info!("🔑 [Auth Service] 尝试认证用户: {}", req.username);
 
-        // 1. 获取用户信息
-        let user = UserRepository::find_by_username(pool, &req.username).await?
+        // 1. 查找用户
+        let user = UserRepository::find_by_username(pool, req.username.trim())
+            .await?
             .ok_or_else(|| {
-                tracing::warn!("🔍 登录失败: 用户 {} 不存在", req.username);
+                tracing::warn!("🔍 [认证失败] 用户不存在: {}", req.username);
                 AppError::AuthError("账号或密码不正确".into())
             })?;
 
-        // 2. 验证密码有效性
-        // 💡 修复点：使用 &req.password
+        // 2. 密码核验 (使用引用借用)
         let is_valid = verify(&req.password, &user.password_hash)?;
         if !is_valid {
-            tracing::warn!("❌ 登录失败: 用户 {} 密码错误", req.username);
+            tracing::warn!("❌ [认证失败] 用户 {} 密码错误", req.username);
             return Err(AppError::AuthError("账号或密码不正确".into()));
         }
 
-        // 3. 生成 JWT Token
-        tracing::debug!("🛰️ 正在为用户 {} 准备签发访问令牌", user.username);
-        
-        let secret = env::var("JWT_SECRET").unwrap_or_else(|_| {
-            tracing::error!("🚨 环境变量缺失: JWT_SECRET 未设置！使用不安全的默认值。");
-            "dangerous_default_secret_please_change_immediately".into()
-        });
+        // 3. 生成身份令牌
+        tracing::debug!("📡 正在为 {} 签发 JWT...", user.username);
+        let secret = env::var("JWT_SECRET").map_err(|_| {
+            tracing::error!("🚨 环境变量 JWT_SECRET 缺失，拒绝签发 Token");
+            AppError::Internal("服务器安全配置缺失".into())
+        })?;
 
-        // 定义 24 小时后过期
         let expiration = Utc::now()
             .checked_add_signed(Duration::hours(24))
-            .expect("非法的时间戳计算")
-            .timestamp() as usize;
+            .ok_or_else(|| AppError::Internal("时间计算溢出".into()))?;
 
         let claims = Claims {
             sub: user.id,
-            exp: expiration,
+            exp: expiration.timestamp() as usize,
         };
 
         let token = encode(
             &Header::default(),
             &claims,
             &EncodingKey::from_secret(secret.as_ref()),
-        )?;
+        )
+        .map_err(|e| {
+            tracing::error!("🔥 JWT 签发失败: {:?}", e);
+            AppError::Internal("令牌生成异常".into())
+        })?;
 
-        tracing::info!("✨ 用户 {} 认证成功，令牌已签发", user.username);
-        
-        Ok(AuthResponse {
-            token,
-            user,
-        })
+        tracing::info!("✨ [登录成功] 用户 {} 已获得访问令牌", user.username);
+        Ok(AuthResponse { token, user })
     }
 }

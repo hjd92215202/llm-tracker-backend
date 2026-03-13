@@ -60,3 +60,14 @@ CREATE TABLE users (
 -- 2. 修改现有表，增加 user_id 关联 (个人系统可先不强制，但建议加上)
 ALTER TABLE roadmap_nodes ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;
 ALTER TABLE notes ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;
+
+ALTER TABLE artifacts ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;
+
+-- 💡 为所有涉及隔离查询的表增加索引
+CREATE INDEX IF NOT EXISTS idx_roadmap_nodes_user_id ON roadmap_nodes(user_id);
+CREATE INDEX IF NOT EXISTS idx_notes_user_id ON notes(user_id);
+CREATE INDEX IF NOT EXISTS idx_artifacts_user_id ON artifacts(user_id);
+
+-- 💡 为排序和父子关系增加索引（提升路径图渲染速度）
+CREATE INDEX IF NOT EXISTS idx_roadmap_nodes_parent_id ON roadmap_nodes(parent_id);
+CREATE INDEX IF NOT EXISTS idx_notes_node_id ON notes(node_id);

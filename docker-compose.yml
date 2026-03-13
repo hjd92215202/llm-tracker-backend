@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  # 后端服务
+  llmtamer-backend:
+    build: ./llm-tracker-backend
+    container_name: llmtamer-backend
+    environment:
+      - DATABASE_URL=postgres://admin:password123@db-llm:5432/llm_tracker
+      - JWT_SECRET=你的长随机字符串
+    depends_on:
+      - db-llm
+    networks:
+      - llm-network
+
+  # 前端服务
+  llmtamer-frontend:
+    build: ./llm-tracker-frontend
+    container_name: llmtamer-frontend
+    networks:
+      - llm-network
+    # 映射到一个不冲突的端口，比如 8081，稍后由主机 Nginx 转发
+    ports:
+      - "8081:80"
+
+  # 数据库
+  db-llm:
+    image: postgres:16
+    container_name: db-llm
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: llm_tracker
+    volumes:
+      - llm_db_data:/var/lib/postgresql/data
+    networks:
+      - llm-network
+
+  # 向量数据库
+  # qdrant:
+  #   image: qdrant/qdrant
+  #   container_name: qdrant-llm
+  #   ports:
+  #     - "6333:6333"
+  #   volumes:
+  #     - ./qdrant_storage:/qdrant/storage
+  #   networks:
+  #     - llm-network
+
+networks:
+  llm-network:
+    driver: bridge
+
+volumes:
+  llm_db_data:
