@@ -30,6 +30,8 @@ services:
     cap_drop:
       - ALL
     cap_add:
+      - CHOWN           # 💡 必须：允许改变文件所有者，解决启动时的emerg报错
+      - FOWNER          # 💡 建议：允许忽略文件所有权限制（处理临时文件）
       - DAC_OVERRIDE
       - DAC_READ_SEARCH
       - SETUID
@@ -40,23 +42,23 @@ services:
       - AUDIT_WRITE
     ports:
       - "80:80"
-      # - "443:443"
-    # volumes:
-      # - ./certbot/conf:/etc/letsencrypt
-      # - ./certbot/www:/usr/share/njet/html
+      - "443:443"
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
     depends_on:
       - llm-backend
 
   # 证书申请与续期 (Certbot)
-  # certbot:
-  #   image: certbot/certbot
-  #   container_name: certbot
-  #   volumes:
-  #     - ./certbot/conf:/etc/letsencrypt
-  #     - ./certbot/www:/usr/share/njet/html
-  #   entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12d & wait $${!}; done;'"
+  certbot:
+    image: certbot/certbot
+    container_name: certbot
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt:ro
+      - ./certbot/www:/var/www/certbot:ro
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12d & wait $${!}; done;'"
 
 volumes:
   postgres_data:
-  # certbot_conf:
+  certbot_conf:
 
